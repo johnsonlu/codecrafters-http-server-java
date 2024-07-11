@@ -1,3 +1,4 @@
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -9,6 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
+import java.util.zip.GZIPOutputStream;
 
 public class Main {
 
@@ -84,12 +86,17 @@ public class Main {
                     .map(String::trim)
                     .collect(Collectors.toSet());
             if (encodings.contains("gzip")) {
+                var compressed = gzipCompress(content);
                 response = "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/plain\r\n" +
                         "Content-Encoding: gzip\r\n" +
-                        String.format("Content-Length: %d\r\n", content.length()) +
-                        "\r\n" +
-                        content;
+                        String.format("Content-Length: %d\r\n", compressed.length) +
+                        "\r\n";
+                var responseBytes = response.getBytes(StandardCharsets.UTF_8);
+                byte[] result = new byte[responseBytes.length + compressed.length];
+                System.arraycopy(responseBytes, 0, result, 0, responseBytes.length);
+                System.arraycopy(compressed, 0, result, responseBytes.length, compressed.length);
+                return result;
             } else {
                 response = "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/plain\r\n" +
@@ -125,6 +132,20 @@ public class Main {
         }
 
         return response.getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] gzipCompress(String content) {
+
+        try {
+            try (var bos = new ByteArrayOutputStream();
+                 var gzip = new GZIPOutputStream(bos)) {
+                gzip.write(content.getBytes(StandardCharsets.UTF_8));
+                gzip.finish();
+                return bos.toByteArray();
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Gzip compress failed", e);
+        }
     }
 
     private static HttpRequest parseHttpRequest(Socket socket) throws IOException {
