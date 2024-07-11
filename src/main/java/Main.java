@@ -4,6 +4,7 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.Executors;
 
 public class Main {
 
@@ -14,21 +15,30 @@ public class Main {
         // You can use print statements as follows for debugging, they'll be visible when running tests.
         System.out.println("Logs from your program will appear here!");
 
-        ServerSocket serverSocket = null;
-        Socket clientSocket = null;
-
         try {
-            serverSocket = new ServerSocket(4221);
+            ServerSocket serverSocket = new ServerSocket(4221);
 
             // Since the tester restarts your program quite often, setting SO_REUSEADDR
             // ensures that we don't run into 'Address already in use' errors
             serverSocket.setReuseAddress(true);
-            clientSocket = serverSocket.accept(); // Wait for connection from client.
 
+            var executors = Executors.newVirtualThreadPerTaskExecutor();
+            while (true) {
+                executors.submit(() -> handleHttpRequest(serverSocket));
+            }
+            
+        } catch (IOException e) {
+            System.out.println("IOException: " + e.getMessage());
+        }
+    }
+
+    private static void handleHttpRequest(ServerSocket serverSocket) {
+        Socket clientSocket = null; // Wait for connection from client.
+        try {
+            clientSocket = serverSocket.accept();
             var httpRequest = parseHttpRequest(clientSocket);
 
             var response = getHttpResponse(httpRequest);
-
             clientSocket.getOutputStream().write(response);
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
