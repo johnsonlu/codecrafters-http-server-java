@@ -2,6 +2,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
@@ -11,9 +13,13 @@ public class Main {
     private static final String HTTP_200_EMPTY_RESPONSE = "HTTP/1.1 200 OK\r\n\r\n";
     private static final String HTTP_404_EMPTY_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n";
 
+    private static String filesDirectory = "";
+
     public static void main(String[] args) {
         // You can use print statements as follows for debugging, they'll be visible when running tests.
         System.out.println("Logs from your program will appear here!");
+
+        filesDirectory = getFileDirectory(args);
 
         try {
             try (ServerSocket serverSocket = new ServerSocket(4221)) {
@@ -33,6 +39,16 @@ public class Main {
         }
     }
 
+    private static String getFileDirectory(String[] args) {
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equalsIgnoreCase("--directory") && i + 1 < args.length) {
+                return args[i + 1];
+            }
+        }
+
+        return "";
+    }
+
     private static void handleHttpRequest(ServerSocket serverSocket) {
         Socket clientSocket = null; // Wait for connection from client.
         try {
@@ -46,7 +62,7 @@ public class Main {
         }
     }
 
-    private static byte[] getHttpResponse(HttpRequest httpRequest) {
+    private static byte[] getHttpResponse(HttpRequest httpRequest) throws IOException {
         String response;
 
         if (httpRequest.getTarget().equals("/")) {
@@ -65,6 +81,19 @@ public class Main {
                     String.format("Content-Length: %d\r\n", content.length()) +
                     "\r\n" +
                     content;
+        } else if (httpRequest.getTarget().startsWith("/files/")) {
+            var fileName = httpRequest.getTarget().substring(7);
+            var filePath = Paths.get(filesDirectory, fileName);
+            if (Files.exists(filePath)) {
+                var content = Files.readString(filePath);
+                response = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: application/octet-stream\r\n" +
+                        String.format("Content-Length: %d\r\n", content.length()) +
+                        "\r\n" +
+                        content;
+            } else {
+                response = HTTP_404_EMPTY_RESPONSE;
+            }
         } else {
             response = HTTP_404_EMPTY_RESPONSE;
         }
