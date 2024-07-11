@@ -25,12 +25,31 @@ public class Main {
 
             var httpRequest = parseHttpRequest(clientSocket);
 
-            var response = httpRequest.getTarget().equals("/") ? HTTP_200_EMPTY_RESPONSE : HTTP_404_EMPTY_RESPONSE;
+            var response = getString(httpRequest);
 
-            clientSocket.getOutputStream().write(response.getBytes(StandardCharsets.UTF_8));
+            clientSocket.getOutputStream().write(response);
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         }
+    }
+
+    private static byte[] getString(HttpRequest httpRequest) {
+        String response;
+
+        if (httpRequest.getTarget().equals("/")) {
+            response = HTTP_200_EMPTY_RESPONSE;
+        } else if (httpRequest.getTarget().startsWith("/echo/")) {
+            var content = httpRequest.getTarget().substring(6);
+            response = "HTTP/1.1 200 OK\r\n" +
+                    "Content-Type: text/plain\r\n" +
+                    String.format("Content-Length: %d\r\n", content.length()) +
+                    "\r\n" +
+                    content;
+        } else {
+            response = HTTP_404_EMPTY_RESPONSE;
+        }
+
+        return response.getBytes(StandardCharsets.UTF_8);
     }
 
     private static HttpRequest parseHttpRequest(Socket socket) throws IOException {
