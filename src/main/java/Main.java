@@ -16,17 +16,18 @@ public class Main {
         System.out.println("Logs from your program will appear here!");
 
         try {
-            ServerSocket serverSocket = new ServerSocket(4221);
+            try (ServerSocket serverSocket = new ServerSocket(4221)) {
 
-            // Since the tester restarts your program quite often, setting SO_REUSEADDR
-            // ensures that we don't run into 'Address already in use' errors
-            serverSocket.setReuseAddress(true);
+                // Since the tester restarts your program quite often, setting SO_REUSEADDR
+                // ensures that we don't run into 'Address already in use' errors
+                serverSocket.setReuseAddress(true);
 
-            var executors = Executors.newVirtualThreadPerTaskExecutor();
-            while (true) {
-                executors.submit(() -> handleHttpRequest(serverSocket));
+                try (var executors = Executors.newVirtualThreadPerTaskExecutor()) {
+                    while (true) {
+                        executors.submit(() -> handleHttpRequest(serverSocket));
+                    }
+                }
             }
-            
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         }
