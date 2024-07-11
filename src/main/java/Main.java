@@ -77,16 +77,27 @@ public class Main {
                     content;
         } else if (httpRequest.getTarget().startsWith("/echo/")) {
             var content = httpRequest.getTarget().substring(6);
-            response = "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: text/plain\r\n" +
-                    String.format("Content-Length: %d\r\n", content.length()) +
-                    "\r\n" +
-                    content;
+            var encodingHeader = httpRequest.getHeaders().getOrDefault("Accept-Encoding", "");
+            if (encodingHeader.equalsIgnoreCase("gzip")) {
+                response = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: text/plain\r\n" +
+                        "Content-Encoding: gzip\r\n" +
+                        String.format("Content-Length: %d\r\n", content.length()) +
+                        "\r\n" +
+                        content;
+            } else {
+                response = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: text/plain\r\n" +
+                        String.format("Content-Length: %d\r\n", content.length()) +
+                        "\r\n" +
+                        content;
+            }
+
         } else if (httpRequest.getTarget().startsWith("/files/")) {
             var fileName = httpRequest.getTarget().substring(7);
             var filePath = Paths.get(filesDirectory, fileName);
 
-            if(httpRequest.getMethod().equals("GET")) {
+            if (httpRequest.getMethod().equals("GET")) {
                 if (Files.exists(filePath)) {
                     var content = Files.readString(filePath);
                     response = "HTTP/1.1 200 OK\r\n" +
@@ -97,7 +108,7 @@ public class Main {
                 } else {
                     response = HTTP_404_EMPTY_RESPONSE;
                 }
-            } else if(httpRequest.getMethod().equals("POST")){
+            } else if (httpRequest.getMethod().equals("POST")) {
                 Files.writeString(filePath, httpRequest.getBody());
                 response = HTTP_201_EMPTY_RESPONSE;
             } else {
