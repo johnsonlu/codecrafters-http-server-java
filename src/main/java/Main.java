@@ -1,5 +1,6 @@
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -14,9 +15,9 @@ import java.util.zip.GZIPOutputStream;
 
 public class Main {
 
-    private static final String HTTP_200_EMPTY_RESPONSE = "HTTP/1.1 200 OK\r\n\r\n";
-    private static final String HTTP_201_EMPTY_RESPONSE = "HTTP/1.1 201 Created\r\n\r\n";
-    private static final String HTTP_404_EMPTY_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n";
+    private static final byte[] HTTP_200_EMPTY_RESPONSE = "HTTP/1.1 200 OK\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] HTTP_201_EMPTY_RESPONSE = "HTTP/1.1 201 Created\r\n\r\n".getBytes(StandardCharsets.UTF_8);
+    private static final byte[] HTTP_404_EMPTY_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n".getBytes(StandardCharsets.UTF_8);
 
     private static String filesDirectory = "";
 
@@ -55,30 +56,29 @@ public class Main {
     }
 
     private static void handleHttpRequest(ServerSocket serverSocket) {
-        Socket clientSocket = null; // Wait for connection from client.
         try {
-            clientSocket = serverSocket.accept();
-            var httpRequest = parseHttpRequest(clientSocket);
+            // Wait for connection from client.
+            var clientSocket = serverSocket.accept();
 
-            var response = getHttpResponse(httpRequest);
-            clientSocket.getOutputStream().write(response);
+            var httpRequest = parseHttpRequest(clientSocket);
+            writeResponse(clientSocket.getOutputStream(), httpRequest);
         } catch (IOException e) {
             System.out.println("IOException: " + e.getMessage());
         }
     }
 
-    private static byte[] getHttpResponse(HttpRequest httpRequest) throws IOException {
-        String response;
+    private static void writeResponse(OutputStream outputStream, HttpRequest httpRequest) throws IOException {
 
         if (httpRequest.getTarget().equals("/")) {
-            response = HTTP_200_EMPTY_RESPONSE;
+            outputStream.write(HTTP_200_EMPTY_RESPONSE);
         } else if (httpRequest.getTarget().equalsIgnoreCase("/user-agent")) {
             var content = httpRequest.getHeaders().getOrDefault("User-Agent", "");
-            response = "HTTP/1.1 200 OK\r\n" +
+            var response = "HTTP/1.1 200 OK\r\n" +
                     "Content-Type: text/plain\r\n" +
                     String.format("Content-Length: %d\r\n", content.length()) +
                     "\r\n" +
                     content;
+            outputStream.write(response.getBytes(StandardCharsets.UTF_8));
         } else if (httpRequest.getTarget().startsWith("/echo/")) {
             var content = httpRequest.getTarget().substring(6);
             var encodingHeader = httpRequest.getHeaders().getOrDefault("Accept-Encoding", "");
@@ -87,22 +87,20 @@ public class Main {
                     .collect(Collectors.toSet());
             if (encodings.contains("gzip")) {
                 var compressed = gzipCompress(content);
-                response = "HTTP/1.1 200 OK\r\n" +
+                var response = "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/plain\r\n" +
                         "Content-Encoding: gzip\r\n" +
                         String.format("Content-Length: %d\r\n", compressed.length) +
                         "\r\n";
-                var responseBytes = response.getBytes(StandardCharsets.UTF_8);
-                byte[] result = new byte[responseBytes.length + compressed.length];
-                System.arraycopy(responseBytes, 0, result, 0, responseBytes.length);
-                System.arraycopy(compressed, 0, result, responseBytes.length, compressed.length);
-                return result;
+                outputStream.write(response.getBytes(StandardCharsets.UTF_8));
+                outputStream.write(compressed);
             } else {
-                response = "HTTP/1.1 200 OK\r\n" +
+                var response = "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/plain\r\n" +
                         String.format("Content-Length: %d\r\n", content.length()) +
                         "\r\n" +
                         content;
+                outputStream.write(response.getBytes(StandardCharsets.UTF_8));
             }
 
         } else if (httpRequest.getTarget().startsWith("/files/")) {
@@ -112,26 +110,24 @@ public class Main {
             if (httpRequest.getMethod().equals("GET")) {
                 if (Files.exists(filePath)) {
                     var content = Files.readString(filePath);
-                    response = "HTTP/1.1 200 OK\r\n" +
+                    var response = "HTTP/1.1 200 OK\r\n" +
                             "Content-Type: application/octet-stream\r\n" +
                             String.format("Content-Length: %d\r\n", content.length()) +
                             "\r\n" +
                             content;
+                    outputStream.write(response.getBytes(StandardCharsets.UTF_8));
                 } else {
-                    response = HTTP_404_EMPTY_RESPONSE;
+                    outputStream.write(HTTP_404_EMPTY_RESPONSE);
                 }
             } else if (httpRequest.getMethod().equals("POST")) {
                 Files.writeString(filePath, httpRequest.getBody());
-                response = HTTP_201_EMPTY_RESPONSE;
+                outputStream.write(HTTP_201_EMPTY_RESPONSE);
             } else {
-                response = HTTP_404_EMPTY_RESPONSE;
+                outputStream.write(HTTP_404_EMPTY_RESPONSE);
             }
-
         } else {
-            response = HTTP_404_EMPTY_RESPONSE;
+            outputStream.write(HTTP_404_EMPTY_RESPONSE);
         }
-
-        return response.getBytes(StandardCharsets.UTF_8);
     }
 
     private static byte[] gzipCompress(String content) {
