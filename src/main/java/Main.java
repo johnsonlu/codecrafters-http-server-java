@@ -4,9 +4,11 @@ import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 public class Main {
 
@@ -78,7 +80,10 @@ public class Main {
         } else if (httpRequest.getTarget().startsWith("/echo/")) {
             var content = httpRequest.getTarget().substring(6);
             var encodingHeader = httpRequest.getHeaders().getOrDefault("Accept-Encoding", "");
-            if (encodingHeader.equalsIgnoreCase("gzip")) {
+            var encodings = Arrays.stream(encodingHeader.split(","))
+                    .map(String::trim)
+                    .collect(Collectors.toSet());
+            if (encodings.contains("gzip")) {
                 response = "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: text/plain\r\n" +
                         "Content-Encoding: gzip\r\n" +
