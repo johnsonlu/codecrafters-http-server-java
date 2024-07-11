@@ -11,6 +11,7 @@ import java.util.concurrent.Executors;
 public class Main {
 
     private static final String HTTP_200_EMPTY_RESPONSE = "HTTP/1.1 200 OK\r\n\r\n";
+    private static final String HTTP_201_EMPTY_RESPONSE = "HTTP/1.1 201 Created\r\n\r\n";
     private static final String HTTP_404_EMPTY_RESPONSE = "HTTP/1.1 404 Not Found\r\n\r\n";
 
     private static String filesDirectory = "";
@@ -84,16 +85,25 @@ public class Main {
         } else if (httpRequest.getTarget().startsWith("/files/")) {
             var fileName = httpRequest.getTarget().substring(7);
             var filePath = Paths.get(filesDirectory, fileName);
-            if (Files.exists(filePath)) {
-                var content = Files.readString(filePath);
-                response = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: application/octet-stream\r\n" +
-                        String.format("Content-Length: %d\r\n", content.length()) +
-                        "\r\n" +
-                        content;
+
+            if(httpRequest.getMethod().equals("GET")) {
+                if (Files.exists(filePath)) {
+                    var content = Files.readString(filePath);
+                    response = "HTTP/1.1 200 OK\r\n" +
+                            "Content-Type: application/octet-stream\r\n" +
+                            String.format("Content-Length: %d\r\n", content.length()) +
+                            "\r\n" +
+                            content;
+                } else {
+                    response = HTTP_404_EMPTY_RESPONSE;
+                }
+            } else if(httpRequest.getMethod().equals("POST")){
+                Files.writeString(filePath, httpRequest.getBody());
+                response = HTTP_201_EMPTY_RESPONSE;
             } else {
                 response = HTTP_404_EMPTY_RESPONSE;
             }
+
         } else {
             response = HTTP_404_EMPTY_RESPONSE;
         }
@@ -112,6 +122,17 @@ public class Main {
         httpRequest.setTarget(requestLine[1]);
         httpRequest.setVersion(requestLine[2]);
 
+        Map<String, String> headers = parseHeaders(lines);
+        httpRequest.setHeaders(headers);
+
+        if (httpRequest.getHeaders().containsKey("Content-Type")) {
+            httpRequest.setBody(lines[lines.length - 1]);
+        }
+
+        return httpRequest;
+    }
+
+    private static Map<String, String> parseHeaders(String[] lines) {
         Map<String, String> headers = new HashMap<>();
         for (int i = 1; i < lines.length; i++) {
             var tokens = lines[i].split(":");
@@ -119,9 +140,7 @@ public class Main {
                 headers.put(tokens[0].trim(), tokens[1].trim());
             }
         }
-        httpRequest.setHeaders(headers);
-
-        return httpRequest;
+        return headers;
     }
 
     private static String[] parseRequestLine(String requestLine) {
@@ -150,6 +169,7 @@ public class Main {
         private String target;
         private String version;
         private Map<String, String> headers;
+        private String body;
 
         public String getVersion() {
             return version;
@@ -181,6 +201,14 @@ public class Main {
 
         public void setHeaders(Map<String, String> headers) {
             this.headers = headers;
+        }
+
+        public String getBody() {
+            return body;
+        }
+
+        public void setBody(String body) {
+            this.body = body;
         }
     }
 }
